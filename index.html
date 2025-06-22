@@ -72,15 +72,25 @@
     </div>
 
     <section id="featured-section" class="featured mb-8 hidden">
-        <h2 class="text-2xl font-semibold mb-4">Featured Tracks</h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-semibold mb-4">Featured Tracks</h2>
+          <button id="view-all-featured" data-section="featured" class="text-l text-gray-400 font-semibold hover:text-purple-500 text-m">View All</button>
+        </div>
         <div id="featured-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         </div>
+        <div id="featured-grid-more" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 hidden mt-4">
+            </div>
     </section>
 
     <section id="popular-section" class="Popular mb-8 hidden">
-        <h2 class="text-2xl font-semibold mb-4">Popular This Week</h2>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-semibold mb-4">Popular This Week</h2>
+            <button id="view-all-popular" data-section="popular" class="text-l text-gray-400 font-semibold hover:text-purple-500 text-m">View All</button>
+        </div>
         <div id="popular-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         </div>
+        <div id="popular-grid-more" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 hidden mt-4">
+            </div>
     </section>
 
 </main>
@@ -125,12 +135,13 @@
 <script>
     // Supabase config
     const SUPABASE_URL = 'https://pibzqbgubzrhtcqfftov.supabase.co'; // REPLACE WITH YOUR ACTUAL SUPABASE URL
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpYnpxYmd1YnpyaHRjcWZmdG92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1Mjc2MjUsImV4cCI6MjA2NTEwMzYyNX0.388avFjv2guDGFpi71-Z-nTsFh1rl7QVjL4IgUWAmjA'; // REPLACE WITH YOUR ACTUAL SUPABASE ANON KEY
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBpYnpxYmd1YnpyaHRjcWZmdG92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1Mjc2MjUsImV4cCI6MjA2NTEwMzYyNX0.388avFjv2guDGFpi71-Z-nTsFh1rl7QVjL4IgUWAmjA"
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // DOM references
     let authLoading, notAuthenticated, authenticated, logoutBtn, libraryLink, userEmail;
     let tracksLoading, tracksError, featuredSection, popularSection;
+    let viewAllFeaturedBtn, viewAllPopularBtn, featuredGridMore, popularGridMore; // New DOM references
 
     // Music Player DOM references and state
     let audioPlayer, playPauseBtn, prevTrackBtn, nextTrackBtn, playerTitle, playerArtist, playerCover, progressBar, currentTimeDisplay, durationDisplay, volumeSlider, muteUnmuteBtn;
@@ -140,6 +151,10 @@
     let isPlaying = false;
     let lastVolume = 0.5; // Store last volume before muting
     let allLoadedTracks = []; // New: To store all tracks loaded for next/previous functionality
+
+    // Store tracks for view all functionality
+    let featuredTracksFull = [];
+    let popularTracksFull = [];
 
     function initDOM() {
         // Auth elements
@@ -155,6 +170,12 @@
         tracksError = document.getElementById('tracks-error');
         featuredSection = document.getElementById('featured-section');
         popularSection = document.getElementById('popular-section');
+
+        // New DOM references for "View All" functionality
+        viewAllFeaturedBtn = document.getElementById('view-all-featured');
+        viewAllPopularBtn = document.getElementById('view-all-popular');
+        featuredGridMore = document.getElementById('featured-grid-more');
+        popularGridMore = document.getElementById('popular-grid-more');
 
         // Music Player elements
         audioPlayer = document.getElementById('audio-player');
@@ -255,7 +276,7 @@
                         track_favorites!left(user_id)
                     `)
                     .order('uploaded_at', { ascending: false })
-                    .limit(20));
+                    .limit(20)); // Fetch up to 20 to have enough for initial and "view all"
 
                 if (error) throw error;
 
@@ -270,7 +291,7 @@
                     .from('tracks')
                     .select('*')
                     .order('uploaded_at', { ascending: false })
-                    .limit(20));
+                    .limit(20)); // Fetch up to 20
                 if (error) throw error;
                 tracksData = data;
             }
@@ -295,30 +316,44 @@
             featuredSection?.classList.remove('hidden');
             popularSection?.classList.remove('hidden');
 
-            // Shuffle and select tracks for featured section
-            const shuffledForFeatured = [...tracksData].sort(() => 0.5 - Math.random());
-            const featuredTracks = shuffledForFeatured.slice(0, 4);
+            // Shuffle and store all tracks for featured section
+            featuredTracksFull = [...tracksData].sort(() => 0.5 - Math.random());
+            const featuredInitial = featuredTracksFull.slice(0, 4);
 
-            // Shuffle and select tracks for popular section
-            const shuffledForPopular = [...tracksData].sort(() => 0.5 - Math.random());
-            const popularTracks = shuffledForPopular.slice(0, 4);
+            // Shuffle and store all tracks for popular section
+            popularTracksFull = [...tracksData].sort(() => 0.5 - Math.random());
+            const popularInitial = popularTracksFull.slice(0, 4);
 
-            // Generate HTML for featured tracks
-            const featuredHTML = featuredTracks
+            // Generate HTML for initial 4 featured tracks
+            const featuredHTML = featuredInitial
                 .map(track => createTrackCard(track))
                 .join('');
 
-            // Generate HTML for popular tracks
-            const popularHTML = popularTracks
+            // Generate HTML for initial 4 popular tracks
+            const popularHTML = popularInitial
                 .map(track => createTrackCard(track))
                 .join('');
 
-            // Update the DOM
+            // Update the DOM for initial display
             const featuredGrid = document.getElementById('featured-grid');
             const popularGrid = document.getElementById('popular-grid');
 
             if (featuredGrid) featuredGrid.innerHTML = featuredHTML;
             if (popularGrid) popularGrid.innerHTML = popularHTML;
+
+            // Show/hide "View All" buttons based on whether there are more tracks
+            if (featuredTracksFull.length > 4 && viewAllFeaturedBtn) {
+                viewAllFeaturedBtn.classList.remove('hidden');
+            } else if (viewAllFeaturedBtn) {
+                viewAllFeaturedBtn.classList.add('hidden');
+            }
+
+            if (popularTracksFull.length > 4 && viewAllPopularBtn) {
+                viewAllPopularBtn.classList.remove('hidden');
+            } else if (viewAllPopularBtn) {
+                viewAllPopularBtn.classList.add('hidden');
+            }
+
 
             // IMPORTANT: Create icons after adding content to DOM
             lucide.createIcons();
@@ -339,6 +374,39 @@
         }
     }
 
+    // New function to handle "View All" clicks
+    function toggleViewAll(section) {
+        const gridContainer = document.getElementById(`${section}-grid-more`);
+        const viewAllButton = document.getElementById(`view-all-${section}`);
+
+        if (!gridContainer || !viewAllButton) return;
+
+        if (gridContainer.classList.contains('hidden')) {
+            // Show all
+            gridContainer.classList.remove('hidden');
+            viewAllButton.textContent = 'Show Less';
+
+            let tracksToShow = [];
+            if (section === 'featured') {
+                tracksToShow = featuredTracksFull.slice(4); // Get tracks from the 5th onwards
+            } else if (section === 'popular') {
+                tracksToShow = popularTracksFull.slice(4);
+            }
+
+            if (tracksToShow.length > 0) {
+                const additionalHTML = tracksToShow.map(track => createTrackCard(track)).join('');
+                gridContainer.innerHTML = additionalHTML;
+                lucide.createIcons(); // Re-render icons for newly added elements
+            }
+        } else {
+            // Hide additional
+            gridContainer.classList.add('hidden');
+            viewAllButton.textContent = 'View All';
+            gridContainer.innerHTML = ''; // Clear content when hidden
+        }
+    }
+
+
     // Create track card HTML
     function createTrackCard(track) {
         // Fallback image if cover_path is missing or broken
@@ -354,7 +422,7 @@
             <div class="bg-[#1a1a1a] rounded-lg p-4 hover:bg-[#222] transition-colors cursor-pointer" onclick="playTrack('${track.id}')">
                 <div class="relative mb-3">
                     <img src="${coverImage}" alt="${title}" class="w-full aspect-square rounded-md object-cover"
-                                onerror="this.src='https://via.placeholder.com/300x300/1a1a1a/purple?text=No+Image'" />
+                                 onerror="this.src='https://via.placeholder.com/300x300/1a1a1a/purple?text=No+Image'" />
                     <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 rounded-md flex items-center justify-center transition-all">
                         <i data-lucide="play" class="w-12 h-12 text-white opacity-0 hover:opacity-100 transition-opacity"></i>
                     </div>
@@ -363,15 +431,15 @@
                 <p class="text-gray-400 text-sm truncate" title="${author}">${author}</p>
                 <div class="flex justify-between items-center text-sm mt-3">
                     <button class="flex items-center gap-1 hover:text-red-400 transition-colors ${isLiked ? 'text-red-400' : 'text-gray-400'}"
-                                onclick="event.stopPropagation(); toggleLike('${track.id}', this)"
-                                data-track-id="${track.id}">
+                                 onclick="event.stopPropagation(); toggleLike('${track.id}', this)"
+                                 data-track-id="${track.id}">
                         <i data-lucide="heart" class="w-4 h-4 ${isLiked ? 'fill-current' : ''}"></i>
                         <span class="like-count">${likeCount}</span>
                     </button>
 
                     <button class="hover:text-yellow-400 transition-colors ${isFavorited ? 'text-yellow-400' : 'text-gray-400'}"
-                                onclick="event.stopPropagation(); toggleFavorite('${track.id}', this)"
-                                data-track-id="${track.id}">
+                                 onclick="event.stopPropagation(); toggleFavorite('${track.id}', this)"
+                                 data-track-id="${track.id}">
                         <i data-lucide="star" class="w-4 h-4 ${isFavorited ? 'fill-current' : ''}"></i>
                     </button>
                 </div>
@@ -446,11 +514,11 @@
 
         lucide.createIcons(); // Re-render Lucide icons if their state changed (e.g., fill-current)
 
-    } catch (error) {
-        console.error('Error toggling like:', error);
-        // You might want to revert the optimistic UI update on error here
+      } catch (error) {
+            console.error('Error toggling like:', error);
+            // You might want to revert the optimistic UI update on error here
+      }
     }
-  } 
 
     // Favorite functionality
     async function toggleFavorite(trackId, buttonElement) {
@@ -690,6 +758,15 @@
             logoutBtn.addEventListener('click', logout);
         }
 
+        // Add event listeners for "View All" buttons
+        if (viewAllFeaturedBtn) {
+            viewAllFeaturedBtn.addEventListener('click', () => toggleViewAll('featured'));
+        }
+        if (viewAllPopularBtn) {
+            viewAllPopularBtn.addEventListener('click', () => toggleViewAll('popular'));
+        }
+
+
         // --- Music Player Event Listeners ---
         if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
         if (prevTrackBtn) prevTrackBtn.addEventListener('click', playPrevTrack);
@@ -803,6 +880,5 @@
         });
     });
 </script>
-
 </body>
 </html>
